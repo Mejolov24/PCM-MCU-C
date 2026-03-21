@@ -1,0 +1,2 @@
+const int SampleRate = 8000;
+const int BitDepth = 16;

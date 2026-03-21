@@ -1,17 +1,19 @@
 import os
-
+import re
+import ffmpeg
+import numpy as np
 # sys.argv is a list of command-line arguments
 # sys.argv[0] is the path to the script itself
 # sys.argv[1:] contains the paths of the dropped files
 
 run_path = os.path.dirname(os.path.abspath(__file__))
-
-import ffmpeg
-
+cache_dir = os.path.join(run_path, "output")
+cache_file = os.path.join(cache_dir, "settings.txt")
+output_file = os.path.join(cache_dir, "output.h")
 def convert_to_pcm(input_file, sample_rate, bit_depth):
     output_file = os.path.join(
     run_path,
-    "cache",
+    "output",
     os.path.basename(input_file) + ".raw"
 )
 
@@ -35,11 +37,20 @@ def convert_to_pcm(input_file, sample_rate, bit_depth):
     return output_file
 
 
+def sanitize_filename(file_path):
+    # Get the base name without extension
+    base = os.path.splitext(os.path.basename(file_path))[0]
+    
+    # Remove any suffix
+    base = re.sub(r'.(mp3|wav)$', '', base, flags=re.IGNORECASE)
+    
+    # Replace any non-alphanumeric characters with underscore
+    base = re.sub(r'\W|^(?=\d)', '_', base)
+    
+    return base
+
 def check_cache(sample_rate,bit_depth):
     #get latest cache text to see if settings match
-    cache_dir = os.path.join(run_path, "cache")
-    cache_file = os.path.join(cache_dir, "cache.txt")
-
     cache = get_cache()
     
     if cache == [sample_rate,bit_depth]:
@@ -50,8 +61,6 @@ def check_cache(sample_rate,bit_depth):
         return True # new settings
 
 def get_cache():
-    cache_dir = os.path.join(run_path, "cache")
-    cache_file = os.path.join(cache_dir, "cache.txt")
     with open(cache_file, "r", encoding="utf-8") as f:
         content = f.read()  
         cache = content.strip().split(";")[:2]
@@ -73,7 +82,7 @@ def convert_files(files,sample_rate,bit_depth):
     for file_path in files:
 
         file_name = os.path.basename(file_path)
-        cache_file_path = os.path.join(run_path, "cache",f"{file_name}.raw")
+        cache_file_path = os.path.join(run_path, "output",f"{file_name}.raw")
 
         if new_settings:
             convert_to_pcm(file_path,sample_rate,bit_depth)
@@ -86,8 +95,47 @@ def convert_files(files,sample_rate,bit_depth):
     print("Converted succesfully!")
 
 
+def parse_to_h_file(sample_rate, bit_depth):
+    print("Converting files...\n")
+    raw_files = [
+        os.path.join(cache_dir, f)
+        for f in os.listdir(cache_dir)
+        if f.lower().endswith(".raw")
+    ]
+    
+    dtype_map = {
+        8: np.int8,
+        16: np.int16,
+        32: np.int32,
+        64: np.int64,
+    }
 
- 
+    c_type_map = {
+        8: "unsigned char",
+        16: "int16_t",
+        32: "int32_t",
+        64: "int64_t",
+    }
 
+    with open(output_file, "w") as f:
+        
+        f.write(f"const int SampleRate = {sample_rate};\n")
+        f.write(f"const int BitDepth = {bit_depth};\n")
+
+        for file in raw_files:
+                with open(file, "rb") as f2:
+                    content = f2.read() 
+                    name = sanitize_filename(file)
+                    sample = np.frombuffer(content,dtype_map[bit_depth])
+                    f.write(f"extern const int {name}_len = {len(sample)}; \n")
+                    # Write the PROGMEM array
+                    f.write(f"extern const {c_type_map[bit_depth]} {name}[] PROGMEM ={{\n")
+
+                    for i in range(0, len(sample), 16):  # 16 per line
+                        chunk = sample[i:i+16]
+                        f.write(", ".join(str(int(s)) for s in chunk))
+                        f.write(",\n")
+                    f.write("};\n\n")
+    print("Done!\n")
 
 
