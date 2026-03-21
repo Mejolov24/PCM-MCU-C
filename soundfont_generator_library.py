@@ -36,6 +36,17 @@ def convert_to_pcm(input_file, sample_rate, bit_depth):
 
     return output_file
 
+def check_missing_files():
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+
+    if not os.path.exists(cache_file):
+        with open(cache_file, "w", encoding="utf-8") as f:
+            f.write("")
+    
+    if not os.path.exists(output_file):
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write("")
 
 def sanitize_filename(file_path):
     # Get the base name without extension
@@ -49,23 +60,37 @@ def sanitize_filename(file_path):
     
     return base
 
-def check_cache(sample_rate,bit_depth):
-    #get latest cache text to see if settings match
-    cache = get_cache()
-    
-    if cache == [sample_rate,bit_depth]:
-        return False # No new settings
-    else:
-        with open(cache_file, "w", encoding="utf-8") as f:
-            f.write(f"{sample_rate};{bit_depth};")
-        return True # new settings
+import os
+
 
 def get_cache():
-    with open(cache_file, "r", encoding="utf-8") as f:
-        content = f.read()  
-        cache = content.strip().split(";")[:2]
-        cache = [int(cache[0]), int(cache[1])]
-    return cache
+    #Return [sample_rate, bit_depth] or None if cache is missing/corrupted
+    if not os.path.exists(cache_file):
+        return None
+    try:
+        with open(cache_file, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        parts = content.split(";")[:2]
+        # ensure both parts are valid integers
+        sample_rate = int(parts[0])
+        bit_depth = int(parts[1])
+        return [sample_rate, bit_depth]
+    except (ValueError, IndexError):
+        return None  # corrupted or incomplete cache
+    except Exception:
+        return None  # any other unexpected error
+
+def check_cache(sample_rate, bit_depth):
+    #Return True if settings changed, False otherwise
+    cache = get_cache()
+    if cache is None:
+        return True  # new settings needed
+    return cache != [sample_rate, bit_depth]
+
+def save_cache(sample_rate, bit_depth):
+    os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+    with open(cache_file, "w", encoding="utf-8") as f:
+        f.write(f"{sample_rate};{bit_depth};")
     
 
 

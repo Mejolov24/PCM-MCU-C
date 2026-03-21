@@ -8,7 +8,7 @@ def ask_mode():
         return int(selected_option)
     else:
         print("Please choose an abalivble option.")
-        ask_mode()
+        return ask_mode()
 
 def ask_files():
     print("Drag and drop one or more files into this window and press Enter:")
@@ -37,6 +37,45 @@ def ask_files():
     else:
         return files
 
+def ask_config(allow_default: bool):
+    global configuration
+
+    while True:
+        # Ask for Bit Depth until valid
+        while True:
+            bit_depth_str = input("Bit Depth (8 or 16): ").strip()
+            if bit_depth_str == "" and allow_default:
+                break
+            try:
+                bit_depth = int(bit_depth_str)
+                if bit_depth in (8, 16):
+                    configuration[1] = bit_depth
+                    break
+                else:
+                    print("Must use 8 or 16 bits!")
+            except ValueError:
+                print("Invalid input, enter an integer!")
+
+        # Ask for Sample Rate
+        while True:
+            sample_rate_str = input("Sample Rate : ").strip()
+            if sample_rate_str == "" and allow_default:
+                break
+            try:
+                configuration[0] = int(sample_rate_str)
+                break
+            except ValueError:
+                print("Invalid input, enter an integer!")
+
+        # If we reach here, both are valid
+        break
+
+
+
+
+
+
+sfg.check_missing_files()
 print(r"""
  _______    ______   __       __          __       __   ______   __    __           ______  
 /       \  /      \ /  \     /  |        /  \     /  | /      \ /  |  /  |         /      \ 
@@ -52,7 +91,7 @@ $$/        $$$$$$/  $$/      $$/         $$/      $$/  $$$$$$/   $$$$$$/        
                                                                                              """)
 
 
-print("Pulse Code Modulation - MicroController - Converter")
+print("Pulse Code Modulation - MicroController - Converter - by Guillermo Beckers (Mejolov24 in github)")
 print("Convert any file into an uncompressed format stored as .raw via ffmpeg, useful for playing audio in microcontrollers with low processing power")
 print("Please select what you want to do:")
 print("""
@@ -61,43 +100,38 @@ print("""
 3 : parse existing files to h file
  """)
 
-configuration = [0,0,0]
+configuration = [0, 0, 0]  # sample_rate, bit_depth, mode
 configuration[2] = ask_mode()
 
-print("\n")
-print("Past configuration :")
+cache = sfg.get_cache()
+if cache is None:
+    print("Cache missing or corrupted, please input settings:")
+    ask_config(False)
+else:
+    configuration[0], configuration[1] = cache
+    print(f"""
+    Past configuration found:
+    Sample Rate: {configuration[0]}
+    Bit Depth : {configuration[1]}
+    """)
+    if not configuration[2] == 3:
+        print("Set configuration (Leave empty to use past configuration):")
+        ask_config(True)
+sfg.save_cache(configuration[0],configuration[1])
 
-
-configuration[0] = sfg.get_cache()[0]
-configuration[1] = sfg.get_cache()[1]
-
-print(f"""
-Sample Rate : {configuration[0]}
-Bit_Depth : {configuration[1]}
- """)
-
-print("Set configuration (Leave empty to use past configuration) : ")
-
-requested_config = [0,0]
-requested_config[0] = input("Sample Rate :")
-requested_config[1] = input("Bith Depth : ")
-
-for i in range(len(requested_config)):
-    config = requested_config[i]
-    if config != "":
-        configuration[i] = int(config)
-        
 
 match configuration[2]:
     case 1:
         files = ask_files()
-        sfg.convert_files(files,configuration[0],configuration[1])
-    case 2: 
+        sfg.convert_files(files, configuration[0], configuration[1])
+    case 2:
         files = ask_files()
-        sfg.convert_files(files,configuration[0],configuration[1])
-        sfg.parse_to_h_file(configuration[0],configuration[1])
+        sfg.convert_files(files, configuration[0], configuration[1])
+        sfg.parse_to_h_file(configuration[0], configuration[1])
     case 3:
-        sfg.parse_to_h_file(configuration[0],configuration[1])
+        sfg.parse_to_h_file(configuration[0], configuration[1])
+
+
 print("\n")
         
 input("Press Enter to exit...")
