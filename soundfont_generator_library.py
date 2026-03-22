@@ -152,9 +152,9 @@ def parse_to_h_file(sample_rate, bit_depth):
                     content = f2.read() 
                     name = sanitize_filename(file)
                     sample = np.frombuffer(content,dtype_map[bit_depth])
-                    f.write(f"extern const int {name}_len = {len(sample)}; \n")
+                    f.write(f"const int {name}_len = {len(sample)}; \n")
                     # Write the PROGMEM array
-                    f.write(f"extern const {c_type_map[bit_depth]} {name}[] PROGMEM ={{\n")
+                    f.write(f"const {c_type_map[bit_depth]} {name}[] PROGMEM ={{\n")
 
                     for i in range(0, len(sample), 16):  # 16 per line
                         chunk = sample[i:i+16]
