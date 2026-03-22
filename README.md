@@ -31,12 +31,12 @@ when picking mode 2 or 3, all audios will be saved into  a single output.h file 
 
 ## output.h file
 
-##Constants :
+### Constants :
 
 const int SampleRate = number;
 const int BitDepth = number;
 
-## Samples are stored like this:
+### Samples are stored like this:
 
 const int name_len = number; 
 const int16_t name[] PROGMEM ={}
