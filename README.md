@@ -30,12 +30,12 @@ you can use thosose .raw files in a sd card and read them directly since they do
 when picking mode 2 or 3, all audios will be saved into  a single output.h file with the minimum info needed.
 
 ## output.h file
-###Contains :
+###Constants :
 
 const int SampleRate = number;
 const int BitDepth = number;
 
-then samples are stored like this:
+## Samples are stored like this:
 
-extern const int name_len = number; 
-extern const int16_t name[] PROGMEM ={}
+const int name_len = number; 
+const int16_t name[] PROGMEM ={}
