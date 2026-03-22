@@ -38,5 +38,6 @@ const int BitDepth = number;
 
 ### Samples are stored like this:
 
-const int name_len = number; 
+const int name_len = number;
+
 const int16_t name[] PROGMEM ={}
