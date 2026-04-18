@@ -1,12 +1,25 @@
 import soundfont_generator_library as sfg
 from pathlib import Path
-
+import colorprint as colors
 run_path = Path(__file__).parent.resolve()
 input_dir = run_path / "input"
 
+Logo : str = (
+r"""
+ _______    ______   __       __          __       __   ______   __    __           ______  
+/       \  /      \ /  \     /  |        /  \     /  | /      \ /  |  /  |         /      \ 
+$$$$$$$  |/$$$$$$  |$$  \   /$$ |        $$  \   /$$ |/$$$$$$  |$$ |  $$ |        /$$$$$$  |
+$$ |__$$ |$$ |  $$/ $$$  \ /$$$ | ______ $$$  \ /$$$ |$$ |  $$/ $$ |  $$ | ______ $$ |  $$/ 
+$$    $$/ $$ |      $$$$  /$$$$ |/      |$$$$  /$$$$ |$$ |      $$ |  $$ |/      |$$ |      
+$$$$$$$/  $$ |   __ $$ $$ $$/$$ |$$$$$$/ $$ $$ $$/$$ |$$ |   __ $$ |  $$ |$$$$$$/ $$ |   __ 
+$$ |      $$ \__/  |$$ |$$$/ $$ |        $$ |$$$/ $$ |$$ \__/  |$$ \__$$ |        $$ \__/  |
+$$ |      $$    $$/ $$ | $/  $$ |        $$ | $/  $$ |$$    $$/ $$    $$/         $$    $$/ 
+$$/        $$$$$$/  $$/      $$/         $$/      $$/  $$$$$$/   $$$$$$/           $$$$$$/  
+                                                                                            """)
+
 def ask_mode():
     selected_option = input("Mode : ")
-    if selected_option == "1" or selected_option == "2" or selected_option == "3":
+    if selected_option == "1" or selected_option == "2" or selected_option == "3" or selected_option == "4":
         return int(selected_option)
     else:
         print("Please choose an abalivble option.")
@@ -62,36 +75,23 @@ def handle_convert_configuration():
             print("Set configuration (Leave empty to use past configuration):")
             ask_config(True)
 
+
 sfg.fix_missing_files()
 sfg.ensure_dir(input_dir)
-print(r"""
-_______    ______   __       __          __       __   ______   __    __           ______  
-/       \  /      \ /  \     /  |        /  \     /  | /      \ /  |  /  |         /      \ 
-$$$$$$$  |/$$$$$$  |$$  \   /$$ |        $$  \   /$$ |/$$$$$$  |$$ |  $$ |        /$$$$$$  |
-$$ |__$$ |$$ |  $$/ $$$  \ /$$$ | ______ $$$  \ /$$$ |$$ |  $$/ $$ |  $$ | ______ $$ |  $$/ 
-$$    $$/ $$ |      $$$$  /$$$$ |/      |$$$$  /$$$$ |$$ |      $$ |  $$ |/      |$$ |      
-$$$$$$$/  $$ |   __ $$ $$ $$/$$ |$$$$$$/ $$ $$ $$/$$ |$$ |   __ $$ |  $$ |$$$$$$/ $$ |   __ 
-$$ |      $$ \__/  |$$ |$$$/ $$ |        $$ |$$$/ $$ |$$ \__/  |$$ \__$$ |        $$ \__/  |
-$$ |      $$    $$/ $$ | $/  $$ |        $$ | $/  $$ |$$    $$/ $$    $$/         $$    $$/ 
-$$/        $$$$$$/  $$/      $$/         $$/      $$/  $$$$$$/   $$$$$$/           $$$$$$/  
-                                                                                            
-                                                                                            
-                                                                                            """)
-
-
+colors.cprint(Logo,"bright_blue")
 print("Pulse Code Modulation - MicroController - Converter - by Guillermo Beckers (Mejolov24 in github)")
 print("Convert any file into an uncompressed format stored as .pcm via ffmpeg, useful for playing audio in microcontrollers with low processing power")
 
-def main():
-
+while True:
     sfg.fix_missing_files()
     sfg.ensure_dir(input_dir)
     print("Please select what you want to do:")
-    print("""
-    1 : convert files
-    2 : parse sample into h file
-    3 : parse samples into .bin file
-    """)
+    print("\n")
+    colors.cprint("1 : convert files","blue")
+    colors.cprint("2 : parse sample into .h file ","green")
+    colors.cprint("3 : parse samples into .bin file","yellow")
+    colors.cprint("4 : Exit","orange")
+    print("\n")
     configuration[2] = ask_mode()
     match configuration[2]:
         case 1:
@@ -100,13 +100,9 @@ def main():
             sfg.save_settings(configuration[0],configuration[1])
         case 2:
             sfg.parse_to_h_file(configuration[0], configuration[1])
+        case 4:
+            break
 
-
-
-    print("\n")
-            
+    print("\n")  
     input("Press Enter to do another operation...")
     print("\n")
-
-while True:
-    main()

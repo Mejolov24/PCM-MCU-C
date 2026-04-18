@@ -116,7 +116,7 @@ def convert_files(InputPath,sample_rate,bit_depth):
             output_file_path.parent.mkdir(parents=True,exist_ok=True)
             if new_settings or not output_file_path.exists():
                 convert_to_pcm(file_path,output_file_path,sample_rate,bit_depth)
-print("\nConverted successfully!")
+    print("\nConverted successfully!")
 
 def parse_to_h_file(sample_rate, bit_depth):
     print("Converting files...\n")
