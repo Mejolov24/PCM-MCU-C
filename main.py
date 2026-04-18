@@ -71,6 +71,8 @@ print("Pulse Code Modulation - MicroController - Converter - by Guillermo Becker
 print("Convert any file into an uncompressed format stored as .pcm via ffmpeg, useful for playing audio in microcontrollers with low processing power")
 print("Please select what you want to do:")
 print("""
+}
+      
 1 : convert files
 2 : convert files and parse into h file
 3 : parse existing files to h file
@@ -93,17 +95,15 @@ else:
     if not configuration[2] == 3:
         print("Set configuration (Leave empty to use past configuration):")
         ask_config(True)
-sfg.save_cache(configuration[0],configuration[1])
-
-files = list(input_dir.rglob("*"))
 match configuration[2]:
     case 1:
-        sfg.convert_files(files, configuration[0], configuration[1])
+        sfg.convert_files(input_dir, configuration[0], configuration[1])
     case 2:
-        sfg.convert_files(files, configuration[0], configuration[1])
+        sfg.convert_files(input_dir, configuration[0], configuration[1])
         sfg.parse_to_h_file(configuration[0], configuration[1])
     case 3:
         sfg.parse_to_h_file(configuration[0], configuration[1])
+sfg.save_settings(configuration[0],configuration[1])
 
 
 print("\n")

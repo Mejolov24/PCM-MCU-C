@@ -11,16 +11,14 @@ output_dir = run_path / "output"
 output_settings = output_dir / "settings.txt"
 output_h = output_dir / "output.h"
 
-def convert_to_pcm(input_file, sample_rate, bit_depth):
-    input_path = Path(input_file)
-    output_file = output_dir / (input_path.stem + ".pcm")
+def convert_to_pcm(input_file,output_file, sample_rate, bit_depth):
 
     codec = 'pcm_s16le' if bit_depth == 16 else 'pcm_s8'
     fmt   = 's16le'     if bit_depth == 16 else 's8'
 
     (
         ffmpeg
-        .input(input_file)
+        .input(str(input_file))
         .output(
             str(output_file),
             format=fmt,
@@ -66,11 +64,11 @@ def get_cache():
         return None
 
 
-def save_cache(sample_rate, bit_depth):
+def save_settings(sample_rate, bit_depth):
     output_settings.write_text(f"{sample_rate};{bit_depth};", encoding="utf-8")
 
 
-def convert_files(files,sample_rate,bit_depth):
+def convert_filesold(files,sample_rate,bit_depth):
     new_settings : bool = (get_cache() != [sample_rate, bit_depth])
 
     if new_settings:
@@ -90,6 +88,31 @@ def convert_files(files,sample_rate,bit_depth):
     print("\n")
     print("Converted succesfully!")
 
+def convert_files(InputPath,sample_rate,bit_depth):
+    current_config = [int(sample_rate), int(bit_depth)]
+    new_settings : bool = (get_cache() != current_config)
+
+    if new_settings:
+        print("Settings changed, overwritting existing files...")
+    else:
+         print("No settings changed, skiping existing files...") 
+    print("\n")
+
+    all_dirs = [InputPath] + [d for d in InputPath.rglob("*") if d.is_dir()]
+
+    for current_dir in all_dirs:
+        files_in_foler = [f for f in current_dir.glob("*") if f.is_file()]
+        if not files_in_foler:
+            continue
+    
+        print(f"Processing Folder : {current_dir.relative_to(InputPath)}")
+        for file_path in files_in_foler:
+            relative_path = file_path.relative_to(InputPath)
+            output_file_path = output_dir / relative_path.with_suffix(".pcm")
+            output_file_path.parent.mkdir(parents=True,exist_ok=True)
+            if new_settings or not output_file_path.exists():
+                convert_to_pcm(file_path,output_file_path,sample_rate,bit_depth)
+print("\nConverted successfully!")
 
 def parse_to_h_file(sample_rate, bit_depth):
     print("Converting files...\n")
