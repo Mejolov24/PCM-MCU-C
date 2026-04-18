@@ -13,7 +13,7 @@ output_h = output_dir / "output.h"
 
 def convert_to_pcm(input_file, sample_rate, bit_depth):
     input_path = Path(input_file)
-    output_file = output_dir / (input_path.name + ".pcm")
+    output_file = output_dir / (input_path.stem + ".pcm")
 
     codec = 'pcm_s16le' if bit_depth == 16 else 'pcm_s8'
     fmt   = 's16le'     if bit_depth == 16 else 's8'
@@ -22,7 +22,7 @@ def convert_to_pcm(input_file, sample_rate, bit_depth):
         ffmpeg
         .input(input_file)
         .output(
-            output_file,
+            str(output_file),
             format=fmt,
             acodec=codec,
             ac=1,              # mono
@@ -36,6 +36,17 @@ def convert_to_pcm(input_file, sample_rate, bit_depth):
 
 def ensure_dir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
+
+def ensure_file(path):
+    file = Path(path)
+    if not file.exists():
+        file.touch(exist_ok=True)
+
+def fix_missing_files():
+    ensure_dir(output_dir)
+    ensure_file(output_settings)
+    ensure_file(output_h)
+
 
 def sanitize_filename(file_path):
     # Get the filepath file name sanitized for C, removing extension and special characters.
@@ -56,7 +67,6 @@ def get_cache():
 
 
 def save_cache(sample_rate, bit_depth):
-    output_settings.mkdir(parents=True,exist_ok=True)
     output_settings.write_text(f"{sample_rate};{bit_depth};", encoding="utf-8")
 
 
@@ -98,7 +108,7 @@ def parse_to_h_file(sample_rate, bit_depth):
         64: "int64_t",
     }
 
-    with open(output_file, "w") as f:
+    with open(output_h, "w") as f:
         
         f.write(f"const int SampleRate = {sample_rate};\n")
         f.write(f"const int BitDepth = {bit_depth};\n")
@@ -106,15 +116,15 @@ def parse_to_h_file(sample_rate, bit_depth):
         for file_path in raw_files:
             content = file_path.read_bytes()
             name = sanitize_filename(file_path)
-            sample = np.frombufer(content, dtype=dtype_map[bit_depth])
-            file_path.write(f"const int {name}_len = {len(sample)}; \n")
-            file_path.write(f"const {c_type_map[bit_depth]} {name}[] PROGMEM ={{\n")
+            sample = np.frombuffer(content, dtype=dtype_map[bit_depth])
+            f.write(f"const int {name}_len = {len(sample)}; \n")
+            f.write(f"const {c_type_map[bit_depth]} {name}[] ={{\n")
 
             for i in range(0, len(sample), 16):
                 chunk = sample[i:i+16]
-                file_path.write(", ".join(str(int(s)) for s in chunk))
-                file_path.write(",\n")
-            file_path.write("};\n\n")
+                f.write(", ".join(str(int(s)) for s in chunk))
+                f.write(",\n")
+            f.write("};\n\n")
     print("Done!\n")
 
 

@@ -1,6 +1,8 @@
 import soundfont_generator_library as sfg
-import os
-import re
+from pathlib import Path
+
+run_path = Path(__file__).parent.resolve()
+input_dir = run_path / "input"
 
 def ask_mode():
     selected_option = input("Mode : ")
@@ -9,33 +11,6 @@ def ask_mode():
     else:
         print("Please choose an abalivble option.")
         return ask_mode()
-
-def ask_files():
-    print("Drag and drop one or more files into this window and press Enter:")
-
-    user_input = input()
-
-    # Grab all quoted paths (handles spaces)
-    files = re.findall(r'"([^"]+)"', user_input)
-
-    # Fallback: if only one file and unquoted
-    if not files and user_input.strip():
-        files = [user_input.strip()]
-
-    # Clean paths
-    clean_files = []
-    for f in files:
-        f = f.strip().rstrip('&')  # remove trailing spaces and '&'
-        f = os.path.abspath(f)     # full path
-        clean_files.append(f)
-
-    files = clean_files
-    
-    if not files:
-        print("No files were dropped onto the script.")
-        return ask_files()
-    else:
-        return files
 
 def ask_config(allow_default: bool):
     global configuration
@@ -75,7 +50,8 @@ def ask_config(allow_default: bool):
 
 
 
-sfg.check_missing_files()
+sfg.fix_missing_files()
+sfg.ensure_dir(input_dir)
 print(r"""
  _______    ______   __       __          __       __   ______   __    __           ______  
 /       \  /      \ /  \     /  |        /  \     /  | /      \ /  |  /  |         /      \ 
@@ -92,7 +68,7 @@ $$/        $$$$$$/  $$/      $$/         $$/      $$/  $$$$$$/   $$$$$$/        
 
 
 print("Pulse Code Modulation - MicroController - Converter - by Guillermo Beckers (Mejolov24 in github)")
-print("Convert any file into an uncompressed format stored as .raw via ffmpeg, useful for playing audio in microcontrollers with low processing power")
+print("Convert any file into an uncompressed format stored as .pcm via ffmpeg, useful for playing audio in microcontrollers with low processing power")
 print("Please select what you want to do:")
 print("""
 1 : convert files
@@ -119,13 +95,11 @@ else:
         ask_config(True)
 sfg.save_cache(configuration[0],configuration[1])
 
-
+files = list(input_dir.rglob("*"))
 match configuration[2]:
     case 1:
-        files = ask_files()
         sfg.convert_files(files, configuration[0], configuration[1])
     case 2:
-        files = ask_files()
         sfg.convert_files(files, configuration[0], configuration[1])
         sfg.parse_to_h_file(configuration[0], configuration[1])
     case 3:
