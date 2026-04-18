@@ -45,15 +45,27 @@ def ask_config(allow_default: bool):
         # If we reach here, both are valid
         break
 
-
-
-
-
+configuration = [0, 0, 0]  # sample_rate, bit_depth, mode
+def handle_convert_configuration():
+    cache = sfg.get_cache()
+    if cache is None:
+        print("Cache missing or corrupted, please input settings:")
+        ask_config(False)
+    else:
+        configuration[0], configuration[1] = cache
+        print(f"""
+        Past configuration found:
+        Sample Rate: {configuration[0]}
+        Bit Depth : {configuration[1]}
+        """)
+        if not configuration[2] == 3:
+            print("Set configuration (Leave empty to use past configuration):")
+            ask_config(True)
 
 sfg.fix_missing_files()
 sfg.ensure_dir(input_dir)
 print(r"""
- _______    ______   __       __          __       __   ______   __    __           ______  
+_______    ______   __       __          __       __   ______   __    __           ______  
 /       \  /      \ /  \     /  |        /  \     /  | /      \ /  |  /  |         /      \ 
 $$$$$$$  |/$$$$$$  |$$  \   /$$ |        $$  \   /$$ |/$$$$$$  |$$ |  $$ |        /$$$$$$  |
 $$ |__$$ |$$ |  $$/ $$$  \ /$$$ | ______ $$$  \ /$$$ |$$ |  $$/ $$ |  $$ | ______ $$ |  $$/ 
@@ -64,48 +76,37 @@ $$ |      $$    $$/ $$ | $/  $$ |        $$ | $/  $$ |$$    $$/ $$    $$/       
 $$/        $$$$$$/  $$/      $$/         $$/      $$/  $$$$$$/   $$$$$$/           $$$$$$/  
                                                                                             
                                                                                             
-                                                                                             """)
+                                                                                            """)
 
 
 print("Pulse Code Modulation - MicroController - Converter - by Guillermo Beckers (Mejolov24 in github)")
 print("Convert any file into an uncompressed format stored as .pcm via ffmpeg, useful for playing audio in microcontrollers with low processing power")
-print("Please select what you want to do:")
-print("""
-}
-      
-1 : convert files
-2 : convert files and parse into h file
-3 : parse existing files to h file
- """)
 
-configuration = [0, 0, 0]  # sample_rate, bit_depth, mode
-configuration[2] = ask_mode()
+def main():
 
-cache = sfg.get_cache()
-if cache is None:
-    print("Cache missing or corrupted, please input settings:")
-    ask_config(False)
-else:
-    configuration[0], configuration[1] = cache
-    print(f"""
-    Past configuration found:
-    Sample Rate: {configuration[0]}
-    Bit Depth : {configuration[1]}
+    sfg.fix_missing_files()
+    sfg.ensure_dir(input_dir)
+    print("Please select what you want to do:")
+    print("""
+    1 : convert files
+    2 : parse sample into h file
+    3 : parse samples into .bin file
     """)
-    if not configuration[2] == 3:
-        print("Set configuration (Leave empty to use past configuration):")
-        ask_config(True)
-match configuration[2]:
-    case 1:
-        sfg.convert_files(input_dir, configuration[0], configuration[1])
-    case 2:
-        sfg.convert_files(input_dir, configuration[0], configuration[1])
-        sfg.parse_to_h_file(configuration[0], configuration[1])
-    case 3:
-        sfg.parse_to_h_file(configuration[0], configuration[1])
-sfg.save_settings(configuration[0],configuration[1])
+    configuration[2] = ask_mode()
+    match configuration[2]:
+        case 1:
+            handle_convert_configuration()
+            sfg.convert_files(input_dir, configuration[0], configuration[1])
+            sfg.save_settings(configuration[0],configuration[1])
+        case 2:
+            sfg.parse_to_h_file(configuration[0], configuration[1])
 
 
-print("\n")
-        
-input("Press Enter to exit...")
+
+    print("\n")
+            
+    input("Press Enter to do another operation...")
+    print("\n")
+
+while True:
+    main()

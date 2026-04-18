@@ -47,9 +47,13 @@ def fix_missing_files():
 
 
 def sanitize_filename(file_path):
-    # Get the filepath file name sanitized for C, removing extension and special characters.
     name = Path(file_path).stem
-    name = re.sub(r'\W^(?=\d)', '_',name)
+    
+    name = re.sub(r'\W+', '_', name)
+    
+    if name[0].isdigit():
+        name = "_" + name
+        
     return name
 
 def get_cache():
