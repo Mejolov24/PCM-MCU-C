@@ -1,8 +1,6 @@
 import soundfont_generator_library as sfg
+import consolecolors as colors
 from pathlib import Path
-import colorprint as colors
-run_path = Path(__file__).parent.resolve()
-input_dir = run_path / "input"
 
 Logo : str = (
 r"""
@@ -19,10 +17,10 @@ $$/        $$$$$$/  $$/      $$/         $$/      $$/  $$$$$$/   $$$$$$/        
 
 def ask_mode():
     selected_option = input("Mode : ")
-    if selected_option == "1" or selected_option == "2" or selected_option == "3" or selected_option == "4":
+    if selected_option == "1" or selected_option == "2" or selected_option == "3":
         return int(selected_option)
     else:
-        print("Please choose an abalivble option.")
+        colors.cprint("[ERR] Please choose an abalivble option.","red")
         return ask_mode()
 
 def ask_config(allow_default: bool):
@@ -40,9 +38,9 @@ def ask_config(allow_default: bool):
                     configuration[1] = bit_depth
                     break
                 else:
-                    print("Must use 8 or 16 bits!")
+                    colors.cprint("[ERR] Must use 8 or 16 bits!","red")
             except ValueError:
-                print("Invalid input, enter an integer!")
+                colors.cprint("[ERR] Invalid input, enter an integer!","red")
 
         # Ask for Sample Rate
         while True:
@@ -53,7 +51,7 @@ def ask_config(allow_default: bool):
                 configuration[0] = int(sample_rate_str)
                 break
             except ValueError:
-                print("Invalid input, enter an integer!")
+                colors.cprint("[ERR] Invalid input, enter an integer!","red")
 
         # If we reach here, both are valid
         break
@@ -61,48 +59,48 @@ def ask_config(allow_default: bool):
 configuration = [0, 0, 0]  # sample_rate, bit_depth, mode
 def handle_convert_configuration():
     cache = sfg.get_cache()
+    print("\n")
     if cache is None:
-        print("Cache missing or corrupted, please input settings:")
+        colors.cprint("[WARN] Old settings missing or corrupted, please input settings:","yellow")
         ask_config(False)
     else:
         configuration[0], configuration[1] = cache
-        print(f"""
-        Past configuration found:
-        Sample Rate: {configuration[0]}
-        Bit Depth : {configuration[1]}
-        """)
+        colors.cprint("\n[INFO] Past configuration found:", "blue")
+        print(f"Sample Rate: {configuration[0]}")
+        print(f"Bit Depth : {configuration[1]}\n")
         if not configuration[2] == 3:
             print("Set configuration (Leave empty to use past configuration):")
             ask_config(True)
 
-
-sfg.fix_missing_files()
-sfg.ensure_dir(input_dir)
 colors.cprint(Logo,"bright_blue")
 print("Pulse Code Modulation - MicroController - Converter - by Guillermo Beckers (Mejolov24 in github)")
 print("Convert any file into an uncompressed format stored as .pcm via ffmpeg, useful for playing audio in microcontrollers with low processing power")
 
 while True:
     sfg.fix_missing_files()
-    sfg.ensure_dir(input_dir)
     print("Please select what you want to do:")
     print("\n")
     colors.cprint("1 : convert files","blue")
     colors.cprint("2 : parse sample into .h file ","green")
-    colors.cprint("3 : parse samples into .bin file","yellow")
-    colors.cprint("4 : Exit","orange")
+    #colors.cprint("3 : parse samples into .bin file","yellow")
+    colors.cprint("3 : Exit","orange")
     print("\n")
     configuration[2] = ask_mode()
+    
     match configuration[2]:
         case 1:
             handle_convert_configuration()
-            sfg.convert_files(input_dir, configuration[0], configuration[1])
+            sfg.convert_files(configuration[0], configuration[1])
             sfg.save_settings(configuration[0],configuration[1])
         case 2:
-            sfg.parse_to_h_file(configuration[0], configuration[1])
-        case 4:
+            if sfg.get_cache() == None:
+                colors.cprint("[ERR] Missing or corrupted settings, convert again","red")
+            else:
+                configuration[0], configuration[1] = sfg.get_cache()
+                sfg.parse_to_h_file(configuration[0], configuration[1])
+        case 3:
             break
 
     print("\n")  
-    input("Press Enter to do another operation...")
+    input("Done! Press Enter to return to the menu...")
     print("\n")
