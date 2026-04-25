@@ -20,10 +20,6 @@ then you must configure how you want the audio to be processed.
 If you already have a config.txt file (made automaticly when missing and updated when changing setttings)
 then you can skip configurating by pressing enter and use your past settings.
 
-To ensure anyone using your files can read them correctly (whether in Godot, Arduino, or plain C), here is the technical breakdown of the **24-byte custom header** your script generates.
-
-This header is prepended to every `.pcm` file when you run **Mode 1**.
-
 ### Binary Structure
 The header is composed of **6 unsigned 32-bit integers** (4 bytes each) using **Little-Endian** byte order.
 
@@ -37,26 +33,6 @@ The header is composed of **6 unsigned 32-bit integers** (4 bytes each) using **
 | **20** | 4 | `Loop End` | The sample index where the loop ends. |
 
 ---
-
-### Why this is better than a standard WAV header:
-1.  **Fixed Size:** Unlike WAV headers (which can have extra "metadata" chunks that vary in length), your header is **always exactly 24 bytes**. You can simply skip the first 24 bytes to get straight to the audio.
-2.  **Integrated Loop Points:** Standard audio files don't store loop information. By baking the `loop_start` and `loop_end` directly into the file, your microcontroller doesn't need a separate config file to know how to loop a sample.
-3.  **Low Overhead:** It uses only 24 bytes of storage, whereas a full WAV header is usually 44 bytes or more.
-
-### How to read it in C
-If you are reading these files from an SD card, you can map a struct directly onto the first 24 bytes:
-
-```c
-typedef struct {
-    uint32_t magic;      // 0x50434D21
-    uint32_t size;       // Total audio bytes
-    uint32_t rate;       // Hz
-    uint32_t depth;      // 8 or 16
-    uint32_t loopA;      // Start
-    uint32_t loopB;      // End
-} PCMHeader;
-
-```
 
 ## Output folder
 after filling out the settings and conversion finishes, everything will be saved onto /output, wich is an exact replica of /input, so your folder structure is kept.
