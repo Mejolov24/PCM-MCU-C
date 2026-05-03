@@ -52,7 +52,7 @@ def read_header(file_path):
 
 def cleanup_stale_files(source_dir, output_dir):
     for item in sorted(output_dir.rglob("*"), reverse=True):
-        if item.name in ["settings.txt", "output.h"]:
+        if item.name in ["settings.txt", "output.h", "output.spack"]:
             continue
         rel_path = item.relative_to(output_dir)
         source_item = source_dir / rel_path
@@ -231,7 +231,7 @@ def organize_sample(files_in_folder):
             if idx < 128:
                 slots[idx] = file_path
             else: 
-                colors.cprint(f"[ERR] File {file_path.name} name index too big, skiping file","red")
+                colors.cprint(f"[ERR] File {file_path.name} name index out of range, skiping file","red")
                 errors += 1
         else: unnumbered.append(file_path)
     un_idx = 0
@@ -242,6 +242,7 @@ def organize_sample(files_in_folder):
     return slots
 
 def organize_folders(dirs):
+    global errors
     slots = [None] * 128
     unnumbered = []
 
@@ -253,12 +254,19 @@ def organize_folders(dirs):
                 slots[idx] = d
         else:
             unnumbered.append(d)
+            colors.cprint(f"[WARN] File {d.name} name index too big or unnumbered, assigned on freee space ","yellow")
+            errors += 1
+
 
     un_idx = 0
     for i in range(128):
         if slots[i] is None and un_idx < len(unnumbered):
             slots[i] = unnumbered[un_idx]
             un_idx += 1
+    if un_idx < len(unnumbered):
+        for f in unnumbered[un_idx:]:
+            colors.cprint(f"[ERR] File {f.name} ignored no free slot available in 128-slot bank","red")
+            errors += 1
 
     return [d for d in slots if d is not None]
 
@@ -329,6 +337,9 @@ def parse_to_h_file(sample_rate,bit_depth):
 
 
 def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
+    global errors
+    errors = 0
+    cleanup_stale_files(input_dir,output_dir)
     output_file = output_dir / "output.spack"
 
     raw_dirs = [d for d in output_dir.iterdir() if d.is_dir()]
@@ -354,6 +365,7 @@ def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
 
         # ---------------- WRITE METADATA TABLES ----------------
         for current_dir in target_dirs:
+            colors.cprint(f"\n[INFO] Processing Folder : {current_dir.relative_to(output_dir)}", "blue")
             folder_offsets.append(file.tell())
 
             raw_files = [f for f in current_dir.glob("*.pcm")]
@@ -361,6 +373,7 @@ def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
 
             for i in range(128):
                 file_path = slots[i]
+                if (file_path) : colors.cprint(f"[INFO] Processing File : {Path(file_path).name}", "blue")
 
                 if file_path is None:
                     file.write(b"\x00" * 20)
@@ -417,4 +430,7 @@ def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
         for off in folder_offsets:
             file.write(struct.pack("<I", off))
 
-    print("[OK] SPACK built correctly")
+    if errors == 0:
+        colors.cprint(f"\n[OK] Finished with no errors.","green")
+    else:
+        colors.cprint(f"\n[WARN] Finished with {errors} errors.","red")

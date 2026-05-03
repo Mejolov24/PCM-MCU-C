@@ -103,7 +103,8 @@ while True:
                 usr_input = input("Aligment : ")
                 try:
                     alig = int(usr_input)
-                    break
+                    if(alig <= 0): colors.cprint("[ERR] Invalid input, enter a number bigger than zero!","red")
+                    else: break
                 except ValueError:
                     colors.cprint("[ERR] Invalid input, enter an integer!","red")
 
