@@ -17,7 +17,7 @@ $$/        $$$$$$/  $$/      $$/         $$/      $$/  $$$$$$/   $$$$$$/        
 
 def ask_mode():
     selected_option = input("Mode : ")
-    if selected_option == "1" or selected_option == "2" or selected_option == "3":
+    if selected_option == "1" or selected_option == "2" or selected_option == "3" or selected_option == "4":
         return int(selected_option)
     else:
         colors.cprint("[ERR] Please choose an abalivble option.","red")
@@ -82,8 +82,8 @@ while True:
     print("\n")
     colors.cprint("1 : convert files","blue")
     colors.cprint("2 : parse sample into .h file ","green")
-    #colors.cprint("3 : parse samples into .bin file","yellow")
-    colors.cprint("3 : Exit","orange")
+    colors.cprint("3 : parse samples into .spack file","yellow")
+    colors.cprint("4 : Exit","orange")
     print("\n")
     configuration[2] = ask_mode()
     
@@ -99,6 +99,17 @@ while True:
                 configuration[0], configuration[1] = sfg.get_cache()
                 sfg.parse_to_h_file(configuration[0], configuration[1])
         case 3:
+            while True:
+                usr_input = input("Aligment : ")
+                try:
+                    alig = int(usr_input)
+                    break
+                except ValueError:
+                    colors.cprint("[ERR] Invalid input, enter an integer!","red")
+
+            configuration[0], configuration[1] = sfg.get_cache()
+            sfg.parse_to_spack(configuration[0],configuration[1], alig)
+        case 4:
             break
 
     print("\n")  

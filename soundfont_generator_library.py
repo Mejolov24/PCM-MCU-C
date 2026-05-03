@@ -241,6 +241,27 @@ def organize_sample(files_in_folder):
             un_idx += 1
     return slots
 
+def organize_folders(dirs):
+    slots = [None] * 128
+    unnumbered = []
+
+    for d in dirs:
+        match = re.match(r'^(\d+)', d.name)
+        if match:
+            idx = int(match.group(1))
+            if idx < 128:
+                slots[idx] = d
+        else:
+            unnumbered.append(d)
+
+    un_idx = 0
+    for i in range(128):
+        if slots[i] is None and un_idx < len(unnumbered):
+            slots[i] = unnumbered[un_idx]
+            un_idx += 1
+
+    return [d for d in slots if d is not None]
+
 def parse_to_h_file(sample_rate,bit_depth):
     global errors
     errors = 0
@@ -307,3 +328,93 @@ def parse_to_h_file(sample_rate,bit_depth):
         colors.cprint(f"\n[WARN] Finished with {errors} errors.","red")
 
 
+def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
+    output_file = output_dir / "output.spack"
+
+    raw_dirs = [d for d in output_dir.iterdir() if d.is_dir()]
+    target_dirs = organize_folders(raw_dirs)
+
+    with open(output_file, "wb") as file:
+
+        # ---------------- HEADER ----------------
+        file.write(b"SPK1")
+        file.write(struct.pack("<III",
+            len(target_dirs),
+            sample_rate,
+            bit_depth
+        ))
+
+        # reserve directory
+        directory_pos = file.tell()
+        file.write(b"\x00" * (len(target_dirs) * 4))
+
+        folder_offsets = []
+        metadata_entries = []
+        string_entries = []
+
+        # ---------------- WRITE METADATA TABLES ----------------
+        for current_dir in target_dirs:
+            folder_offsets.append(file.tell())
+
+            raw_files = [f for f in current_dir.glob("*.pcm")]
+            slots = organize_sample(raw_files)
+
+            for i in range(128):
+                file_path = slots[i]
+
+                if file_path is None:
+                    file.write(b"\x00" * 20)
+                    continue
+
+                magic, size, sr, bd, loopA, loopB = read_header(file_path)
+                name = sanitize_filename(file_path).lstrip('_')
+
+                meta_pos = file.tell()
+
+                # write EMPTY struct (we'll fill later)
+                file.write(struct.pack("<IIIII", 0, 0, 0, 0, 0))
+
+                metadata_entries.append({
+                    "meta_pos": meta_pos,
+                    "file": file_path,
+                    "name": name,
+                    "length": size // (bit_depth // 8),
+                    "loopA": loopA,
+                    "loopB": loopB
+                })
+
+        # ---------------- STRING POOL ----------------
+        for entry in metadata_entries:
+            entry["name_offset"] = file.tell()
+            file.write(entry["name"].encode() + b'\x00')
+
+        # ---------------- AUDIO DATA ----------------
+        for entry in metadata_entries:
+            # align
+            curr = file.tell()
+            padding = (ALIGNMENT - (curr % ALIGNMENT)) % ALIGNMENT
+            file.write(b'\x00' * padding)
+
+            entry["data_offset"] = file.tell()
+
+            pcm_bytes = entry["file"].read_bytes()[24:]
+            file.write(pcm_bytes)
+
+        # ---------------- PATCH METADATA ----------------
+        for entry in metadata_entries:
+            file.seek(entry["meta_pos"])
+
+            file.write(struct.pack("<IIIII",
+                entry["name_offset"],
+                entry["data_offset"],
+                entry["length"],
+                entry["loopA"],
+                entry["loopB"]
+            ))
+
+        # ---------------- PATCH DIRECTORY ----------------
+        file.seek(directory_pos)
+        for off in folder_offsets:
+            file.write(struct.pack("<I", off))
+
+    print("[OK] SPACK built correctly")
