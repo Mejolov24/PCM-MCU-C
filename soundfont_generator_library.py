@@ -152,7 +152,6 @@ def ensure_file(path):
 def fix_missing_files():
     ensure_dir(input_dir)
     ensure_dir(output_dir)
-    ensure_file(output_settings)
     ensure_file(output_h)
 
 
@@ -183,18 +182,9 @@ def save_settings(sample_rate, bit_depth):
 
 
 
-def convert_files(sample_rate,bit_depth):
+def convert_files(sample_rate,bit_depth, new_settings : bool):
     global errors
     errors = 0
-    cleanup_stale_files(input_dir,output_dir)
-    current_config = [int(sample_rate), int(bit_depth)]
-    new_settings : bool = (get_cache() != current_config)
-
-    if new_settings:
-        clear_directory(output_dir)
-        colors.cprint("\n[WARN] Settings changed, deleting /output...\n", "yellow")
-    else:
-         colors.cprint("\n[INFO] No settings changed, skipping existing files...\n", "blue")
 
     all_dirs = [input_dir] + [d for d in input_dir.rglob("*") if d.is_dir()]
 
@@ -273,7 +263,6 @@ def organize_folders(dirs):
 def parse_to_h_file(sample_rate,bit_depth):
     global errors
     errors = 0
-    cleanup_stale_files(input_dir,output_dir)
     colors.cprint("\n[INFO] Parsing samples...\n", "blue")
     dtype_map = {
         8: np.int8,
@@ -339,7 +328,6 @@ def parse_to_h_file(sample_rate,bit_depth):
 def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
     global errors
     errors = 0
-    cleanup_stale_files(input_dir,output_dir)
     output_file = output_dir / "output.spack"
 
     raw_dirs = [d for d in output_dir.iterdir() if d.is_dir()]
