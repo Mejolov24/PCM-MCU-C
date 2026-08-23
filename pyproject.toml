@@ -1,0 +1,20 @@
+[project]
+name = "pcm-mcu-c"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Mejolov24", email = "beckers.rival@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "ffmpeg-python>=0.2.0",
+    "numpy>=2.5.2",
+]
+
+[project.scripts]
+pcm-mcu-c = "pcm_mcu_c:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
