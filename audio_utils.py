@@ -1,19 +1,19 @@
 from pathlib import Path
-import shutil
+import file_utils
 import re
 import ffmpeg
 import numpy as np
 import struct
 import consolecolors as colors
 
-
-run_path = Path(__file__).parent.resolve()
-input_dir = run_path / "input"
-output_dir = run_path / "output"
-output_settings = output_dir / "settings.txt"
-output_h = output_dir / "output.h"
-
-errors = 0
+def get_sample_rate(file):
+    probe = ffmpeg.probe(str(file))
+    
+    for stream in probe['streams']:
+        if stream['codec_type'] == 'audio':
+            return int(stream['sample_rate'])
+    
+    return None
 
 def has_loop_log(loop):
     if loop:
@@ -49,24 +49,6 @@ def read_header(file_path):
 
     return magic, size, sr, bd, loopA, loopB
 
-
-def cleanup_stale_files(source_dir, output_dir):
-    for item in sorted(output_dir.rglob("*"), reverse=True):
-        if item.name in ["settings.txt", "output.h", "output.spack"]:
-            continue
-        rel_path = item.relative_to(output_dir)
-        source_item = source_dir / rel_path
-
-        if item.is_file():
-            base_name = rel_path.with_suffix('')
-            if not list(source_dir.glob(f"{base_name}.*")):
-                item.unlink()
-                colors.cprint(f"[WARN] Removing stale file: {item.name}\nThis is caused by deleting, removing or renaming a file in /input, if this wasnt intended, convert files again.", "yellow")
-        
-        elif item.is_dir():
-            if not source_item.exists():
-                shutil.rmtree(item)
-                colors.cprint(f"[WARN] Removing stale folder: {item.name}\nThis is caused by deleting, removing or renaming a folder in /input, if this wasnt intended, convert files again.", "yellow")
 def convert_to_pcm(input_file, output_file, sample_rate, bit_depth,loop):
     codec = 'pcm_s16le' if bit_depth == 16 else 'pcm_s8'
     fmt   = 's16le'     if bit_depth == 16 else 's8'
@@ -121,68 +103,15 @@ def read_wav_loops(filename):
 
     return None
 
-def clear_directory(dir_path):
-    path = Path(dir_path)
-    if path.exists() and path.is_dir():
-        shutil.rmtree(path)  
-    path.mkdir(parents=True, exist_ok=True)
-
-def get_sample_rate(file):
-    probe = ffmpeg.probe(str(file))
-    
-    for stream in probe['streams']:
-        if stream['codec_type'] == 'audio':
-            return int(stream['sample_rate'])
-    
-    return None
 
 def resample_loop(loop,original_rate,target_rate):
     if not loop : return None
     ratio = target_rate / original_rate
     return (round(loop[0] * ratio), round(loop[1] * ratio))
 
-def ensure_dir(path):
-    Path(path).mkdir(parents=True, exist_ok=True)
-
-def ensure_file(path):
-    file = Path(path)
-    if not file.exists():
-        file.touch(exist_ok=True)
-
-def fix_missing_files():
-    ensure_dir(input_dir)
-    ensure_dir(output_dir)
-    ensure_file(output_h)
 
 
-def sanitize_filename(file_path):
-    name = Path(file_path).stem
-    
-    name = re.sub(r'\W+', '_', name)
-    
-    if name[0].isdigit():
-        name = "_" + name
-        
-    return name
-
-def get_cache():
-    #Return [sample_rate, bit_depth] or None if cache is missing/corrupted
-    if not output_settings.exists():
-        return None
-    try:
-        content = output_settings.read_text(encoding="utf-8").strip()
-        parts = content.split(";"[:2])
-        return [int(parts[0]),int(parts[1])]
-    except (ValueError,IndexError,Exception):
-        return None
-
-
-def save_settings(sample_rate, bit_depth):
-    output_settings.write_text(f"{sample_rate};{bit_depth};", encoding="utf-8")
-
-
-
-def convert_files(sample_rate,bit_depth, new_settings : bool):
+def convert_files(sample_rate,bit_depth, new_settings : bool, input_dir, output_dir):
     global errors
     errors = 0
 
@@ -260,7 +189,7 @@ def organize_folders(dirs):
 
     return [d for d in slots if d is not None]
 
-def parse_to_h_file(sample_rate,bit_depth):
+def parse_to_h_file(sample_rate,bit_depth, input_dir, output_file):
     global errors
     errors = 0
     colors.cprint("\n[INFO] Parsing samples...\n", "blue")
@@ -270,8 +199,7 @@ def parse_to_h_file(sample_rate,bit_depth):
         32: np.int32,
         64: np.int64,
     }
-
-    with open(output_h, "w") as file:
+    with open(output_file, "w") as file:
         file.write(f"#include <stdint.h>\n")
         file.write(f"const int SampleRate = {sample_rate};\n")
         file.write(f"const int BitDepth = {bit_depth};\n")
@@ -285,20 +213,20 @@ def parse_to_h_file(sample_rate,bit_depth):
         file.write("    uint32_t loop_end;\n\n")
         file.write("};\n\n")
 
-        all_dirs = [output_dir] + [d for d in output_dir.rglob("*") if d.is_dir()]
+        all_dirs = [input_dir] + [d for d in input_dir.rglob("*") if d.is_dir()]
 
         for current_dir in all_dirs:
-            folder_array_name = sanitize_filename(current_dir)
+            folder_array_name = file_utils.sanitize_filename(current_dir)
             raw_files = [f for f in current_dir.glob("*.pcm") if f.is_file()]
             slots = organize_sample(raw_files)
             occupied_entries = {}
-            colors.cprint(f"\n[INFO] Processing Folder : {current_dir.relative_to(output_dir)}", "blue")
+            colors.cprint(f"\n[INFO] Processing Folder : {current_dir.relative_to(input_dir)}", "blue")
             for i, file_path in enumerate(slots):
                 if file_path is None : continue
                 colors.cprint(f"[INFO] Processing File : {file_path.name}", "blue")
-                var_name = f"{folder_array_name}_{sanitize_filename(file_path)}"
+                var_name = f"{folder_array_name}_{file_utils.sanitize_filename(file_path)}"
                 var_name = re.sub(r'_+', '_', var_name)
-                display_name = sanitize_filename(file_path).lstrip('_')
+                display_name = file_utils.sanitize_filename(file_path).lstrip('_')
                 display_name = re.sub(r'_+', '_', display_name)
                 magic, size, sr, bd, loopA, loopB = read_header(file_path)
                 occupied_entries[i] = f'{{ "{display_name}", {var_name}, {var_name}_len, {sr}, {loopA}, {loopB} }}'
@@ -325,12 +253,11 @@ def parse_to_h_file(sample_rate,bit_depth):
         colors.cprint(f"\n[WARN] Finished with {errors} errors.","red")
 
 
-def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
+def parse_to_spack(sample_rate, bit_depth, ALIGNMENT, input_dir, output_file):
     global errors
     errors = 0
-    output_file = output_dir / "output.spack"
 
-    raw_dirs = [d for d in output_dir.iterdir() if d.is_dir()]
+    raw_dirs = [d for d in input_dir.iterdir() if d.is_dir()]
     target_dirs = organize_folders(raw_dirs)
 
     with open(output_file, "wb") as file:
@@ -353,7 +280,7 @@ def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
 
         # ---------------- WRITE METADATA TABLES ----------------
         for current_dir in target_dirs:
-            colors.cprint(f"\n[INFO] Processing Folder : {current_dir.relative_to(output_dir)}", "blue")
+            colors.cprint(f"\n[INFO] Processing Folder : {current_dir.relative_to(input_dir)}", "blue")
             folder_offsets.append(file.tell())
 
             raw_files = [f for f in current_dir.glob("*.pcm")]
@@ -368,7 +295,7 @@ def parse_to_spack(sample_rate, bit_depth, ALIGNMENT):
                     continue
 
                 magic, size, sr, bd, loopA, loopB = read_header(file_path)
-                name = sanitize_filename(file_path).lstrip('_')
+                name = file_utils.sanitize_filename(file_path).lstrip('_')
 
                 meta_pos = file.tell()
 

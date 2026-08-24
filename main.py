@@ -1,4 +1,5 @@
-import soundfont_generator_library as sfg
+import audio_utils
+import file_utils
 import consolecolors as colors
 from pathlib import Path
 import shutil
@@ -23,19 +24,11 @@ DEFAULT_SETTINGS = {
     "padding": 16
 }
 
-def ensure_dir(path):
-    Path(path).mkdir(parents=True, exist_ok=True)
-
-def ensure_file(path):
-    file = Path(path)
-    if not file.exists():
-        file.touch(exist_ok=True)
-
 def fix_missing_files():
-    ensure_dir(input_dir)
-    ensure_dir(output_dir)
-    ensure_file(output_h)
-    ensure_file(settings_path)
+    file_utils.ensure_dir(input_dir)
+    file_utils.ensure_dir(output_dir)
+    file_utils.ensure_file(output_h)
+    file_utils.ensure_file(settings_path)
 
 
 def init_settings():
@@ -58,7 +51,7 @@ def sync_json_settings():
 
 
 def print_info():
-    ##print("\033[H\033[2J")
+    print("\033[H\033[2J")
     colors.cprint(logo.logo,"green")
     print("Pulse Code Modulation - MicroController - Converter - by Guillermo Beckers (Mejolov24 in github)")
     print("Convert any file into an uncompressed format stored as .pcm via ffmpeg, useful for playing audio in microcontrollers with low processing power")
@@ -75,54 +68,32 @@ def set_and_store_settings(index, value = None):
             settings["padding"] = value
     sync_json_settings()
     init_settings()
-
-def clear_directory(dir_path):
-    path = Path(dir_path)
-    if path.exists() and path.is_dir():
-        shutil.rmtree(path)  
-    path.mkdir(parents=True, exist_ok=True)
-
-def cleanup_stale_files(source_dir, output_dir):
-    for item in sorted(output_dir.rglob("*"), reverse=True):
-        if item.name in ["output.h", "output.spack"]:
-            continue
-        rel_path = item.relative_to(output_dir)
-        source_item = source_dir / rel_path
-
-        if item.is_file() and item.suffix == ".pcm":
-            parent_dir = source_dir / rel_path.parent
-            stem = item.stem
-            matching_sources = False
-            if parent_dir.exists():
-                for src_file in parent_dir.iterdir():
-                    if src_file.stem == stem:
-                        matching_sources = True
-                        break
-            if not matching_sources:
-                item.unlink()
-                colors.cprint(f"[WARN] Removing stale file: {item.name}\nThis is caused by deleting, removing or renaming a file in /input, if this wasnt intended, convert files again.", "yellow")
-        
-        elif item.is_dir():
-            if not source_item.exists():
-                shutil.rmtree(item)
-                colors.cprint(f"[WARN] Removing stale folder: {item.name}\nThis is caused by deleting, removing or renaming a folder in /input, if this wasnt intended, convert files again.", "yellow")
+    print_info()
 
 def convert_files():
     new_settings : bool = (previous_settings != settings)
 
     if new_settings:
-        clear_directory(output_dir)
+        file_utils.clear_directory(output_dir)
         colors.cprint("\n[WARN] Settings changed, deleting /output...\n", "yellow")
     else:
          colors.cprint("\n[INFO] No settings changed, skipping existing files...\n", "blue")
 
-    sfg.convert_files(settings["sampling_rate"], settings["bit_depth"], new_settings)
+    audio_utils.convert_files(settings["sampling_rate"], settings["bit_depth"], new_settings,input_dir,output_dir)
+    input(colors.ctext("Press Enter...","orange"))
+    print_info()
 
 def convert_to_h():
-    sfg.parse_to_h_file(settings["sampling_rate"], settings["bit_depth"])
+    audio_utils.parse_to_h_file(settings["sampling_rate"], settings["bit_depth"],output_dir, output_h)
+    input(colors.ctext("Press Enter...","orange"))
+    print_info()
 
 def convert_to_spack():
-    sfg.parse_to_spack(settings["sampling_rate"], settings["bit_depth"], settings["padding"])
+    file_count = sum(1 for item in output_dir.rglob("*.spack") if item.is_file())
+    output_spack = output_dir / f"{file_count}_{settings["bit_depth"]}_bits_{settings["sampling_rate"]}_hz.spack"
+    audio_utils.parse_to_spack(settings["sampling_rate"], settings["bit_depth"], settings["padding"], output_dir, output_spack)
+    input(colors.ctext("Press Enter...","orange"))
+    print_info()
 
 ConfigurationMenu = menu.Menu([
     menu.MenuItem("Bit Depth", int, "Enter bit depth : "),
@@ -136,8 +107,8 @@ Menu = menu.Menu([
     menu.MenuItem(colors.ctext("Convert files","blue"), callable, target=convert_files),
     menu.MenuItem(colors.ctext("Convert to .h","green"), callable, target=convert_to_h),
     menu.MenuItem(colors.ctext("Convert to .spack","yellow"), callable, target=convert_to_spack),
-    menu.MenuItem("Configure", menu.Menu, target=ConfigurationMenu),
-    menu.MenuItem(colors.ctext("Exit","orange"),menu.Exit)
+    menu.MenuItem(colors.ctext("Configure","orange"), menu.Menu, target=ConfigurationMenu),
+    menu.MenuItem(colors.ctext("Exit","red"),menu.Exit)
 ],
 None, False)
 
@@ -150,8 +121,7 @@ menu.goToMenu(Menu)
 while menu.render():
     try:
         fix_missing_files()
-        print_info()
-        cleanup_stale_files(input_dir,output_dir)
+        file_utils.cleanup_stale_files(input_dir,output_dir)
     except KeyboardInterrupt: continue
 print("\033[?1049l", end="") ## drop screen buffer
 print("Thanks for using!")
