@@ -257,7 +257,7 @@ def parse_to_spack(sample_rate, bit_depth, ALIGNMENT, input_dir, output_file):
     global errors
     errors = 0
 
-    raw_dirs = [d for d in input_dir.iterdir() if d.is_dir()]
+    raw_dirs = [d for d in input_dir.iterdir() if d.is_dir() and d.name != "sf2"]
     target_dirs = organize_folders(raw_dirs)
 
     with open(output_file, "wb") as file:
@@ -349,3 +349,207 @@ def parse_to_spack(sample_rate, bit_depth, ALIGNMENT, input_dir, output_file):
         colors.cprint(f"\n[OK] Finished with no errors.","green")
     else:
         colors.cprint(f"\n[WARN] Finished with {errors} errors.","red")
+
+
+def sanitize(name):
+  return "".join(
+      c if c.isalnum() or c in (" ", "_", "-") else "_" for c in name
+  ).strip()
+
+
+def parse_sf2(file_path):
+  with open(file_path, "rb") as f:
+    if f.read(4) != b"RIFF" or f.read(4) and f.read(4) != b"sfbk":
+      raise ValueError("Invalid SoundFont")
+    f.seek(12)
+    chunks = {}
+
+    def walk(end):
+      while f.tell() < end:
+        cid, size = f.read(4), struct.unpack("<I", f.read(4))[0]
+        pos = f.tell()
+        if cid == b"LIST":
+          f.read(4)
+          walk(pos + size)
+        else:
+          chunks[cid] = f.read(size)
+        if size % 2:
+          f.seek(1, 1)
+
+    walk(file_path.stat().st_size)
+  return chunks
+
+
+def get_gens(bag_data, gen_data, idx):
+  if not bag_data or not gen_data or idx >= len(bag_data) // 4 - 1:
+    return []
+  s, _ = struct.unpack("<HH", bag_data[idx * 4 : idx * 4 + 4])
+  e, _ = struct.unpack("<HH", bag_data[(idx + 1) * 4 : (idx + 1) * 4 + 4])
+  return [
+      struct.unpack("<Hh", gen_data[g * 4 : g * 4 + 4]) for g in range(s, e)
+  ]
+
+
+def resample(data, ratio):
+  if ratio == 1.0 or not data:
+    return data
+  orig = struct.unpack(f"<{len(data)//2}h", data)
+  new_len = max(1, int(len(orig) / ratio))
+  res = []
+  for i in range(new_len):
+    idx = i * ratio
+    lo = int(idx)
+    if lo >= len(orig) - 1:
+      res.append(orig[-1])
+    else:
+      val = int(orig[lo] + (orig[lo + 1] - orig[lo]) * (idx - lo))
+      res.append(max(-32768, min(32767, val)))
+  return struct.pack(f"<{len(res)}h", *res)
+
+def write_wav(path, data, rate, loop_s, loop_e, pitch):
+  has_loop = loop_e > loop_s > 0
+  smpl = (
+      struct.pack(
+          "<15I", 0, 0, 0, pitch, 0, 0, 0, 1, 0, 0, 0, loop_s, loop_e, 0, 0
+      )
+      if has_loop
+      else b""
+  )
+  sz = 4 + 24 + 8 + len(data) + (len(smpl) + 8 if has_loop else 0)
+  with open(path, "wb") as f:
+    f.write(
+        b"RIFF"
+        + struct.pack("<I", sz)
+        + b"WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00"
+        + struct.pack("<IIHH", rate, rate * 2, 2, 16)
+    )
+    if has_loop:
+      f.write(b"smpl" + struct.pack("<I", len(smpl)) + smpl)
+    f.write(b"data" + struct.pack("<I", len(data)) + data)
+
+
+def sf2_to_wav(sf2 : Path, out_dir : Path, do_resample : bool, base_note : int):
+  c = parse_sf2(sf2)
+  if not all(k in c for k in (b"smpl", b"phdr", b"shdr")):
+    raise ValueError("Missing essential chunks")
+
+  samples = []
+  for i in range(len(c[b"shdr"]) // 46 - 1):
+    e = c[b"shdr"][i * 46 : (i + 1) * 46]
+    n, st, ed, lst, led, rate, pit, _, _, typ = struct.unpack("<20s5IBbHH", e)
+    samples.append({
+        "name": n.decode("ascii", errors="ignore").rstrip("\x00") or f"s_{i}",
+        "st": st,
+        "ed": ed,
+        "lst": lst,
+        "led": led,
+        "rate": rate,
+        "pit": pit,
+        "typ": typ,
+    })
+
+  insts = []
+  for i in range(len(c[b"inst"]) // 22 - 1):
+    n, bdx = struct.unpack("<20sH", c[b"inst"][i * 22 : (i + 1) * 22])
+    insts.append({
+        "name": n.decode("ascii", errors="ignore").rstrip("\x00") or f"i_{i}",
+        "bdx": bdx,
+    })
+  insts.append({"name": "EOP", "bdx": len(c[b"ibag"]) // 4 if b"ibag" in c else 0})
+
+  base_out_dir = Path(out_dir)
+  phdr, count = c[b"phdr"], 0
+
+  for p in range(len(phdr) // 38 - 1):
+    p_bytes = phdr[p * 38 : (p + 1) * 38]
+    nxt_bytes = phdr[(p + 1) * 38 : (p + 2) * 38]
+    name, pnum, bank, bdx = struct.unpack("<20sHHH", p_bytes[:26])
+    next_bdx = struct.unpack("<20sHHH", nxt_bytes[:26])[3]
+    pname = name.decode("ascii", errors="ignore").rstrip("\x00") or f"p_{p}"
+
+    tdir = base_out_dir / f"{bank}_bank"
+    tdir.mkdir(parents=True, exist_ok=True)
+
+    is_perc = bank == 128
+    active_inst = None
+
+    for bi in range(bdx, next_bdx):
+      for op, amt in get_gens(c.get(b"pbag"), c.get(b"pgen"), bi):
+        if op == 41:
+          active_inst = amt
+      if active_inst is None or not (0 <= active_inst < len(insts) - 1):
+        continue
+
+      ins = insts[active_inst]
+      zones = []
+
+      # Collect all valid zones for this instrument configuration
+      for ib in range(ins["bdx"], insts[active_inst + 1]["bdx"]):
+        s_idx, root, lo, hi = None, 60, 0, 127
+        for op, amt in get_gens(c.get(b"ibag"), c.get(b"igen"), ib):
+          if op == 53:
+            s_idx = amt
+          elif op == 58 and amt >= 0:
+            root = amt
+          elif op == 43:
+            lo, hi = amt & 0xFF, (amt >> 8) & 0xFF
+
+        if (
+            s_idx is not None
+            and 0 <= s_idx < len(samples)
+            and not (samples[s_idx]["typ"] & 0x8000)
+        ):
+          smpl = samples[s_idx]
+          if root == 60 and smpl["pit"] > 0:
+            root = smpl["pit"]
+          zones.append({"s_idx": s_idx, "root": root, "lo": lo, "hi": hi})
+
+      if not zones:
+        continue
+
+      # For melodic instruments, pick the single zone closest to MIDI base_note
+      if not is_perc:
+        valid_zones = [z for z in zones if z["lo"] <= base_note <= z["hi"]]
+        if not valid_zones:
+          # Fallback: pick the zone whose root/center is closest to base_note if none explicitly bracket it
+          valid_zones = zones
+        best_zone = min(valid_zones, key=lambda z: abs(z["root"] - base_note))
+        target_zones = [best_zone]
+      else:
+        target_zones = zones  # Percussion maps all individual drum pads
+
+      for z in target_zones:
+        s_idx = z["s_idx"]
+        root = z["root"]
+        smpl = samples[s_idx]
+
+        audio = c[b"smpl"][smpl["st"] * 2 : smpl["ed"] * 2]
+        ls = smpl["lst"] - smpl["st"] if smpl["led"] > smpl["lst"] else 0
+        le = smpl["led"] - smpl["st"] if smpl["led"] > smpl["lst"] else 0
+        if ls < 0 or le > len(audio) // 2:
+          ls = le = 0
+
+        # Conditional Resampling
+        if not is_perc and root != base_note and do_resample:
+          ratio = 2.0 ** ((base_note - root) / 12.0)
+          audio = resample(audio, ratio)
+          ls, le = (
+              (int(ls / ratio), int(le / ratio))
+              if ls > 0 and le > ls
+              else (0, 0)
+          )
+          pitch = base_note
+        else:
+          pitch = root
+
+        fname = f"{pnum:03d}_{sanitize(smpl['name'])}.wav"
+        write_wav(
+            tdir / fname,
+            audio,
+            smpl["rate"],
+            ls,
+            le,
+            pitch,
+        )
+        colors.cprint(f"[INFO] [Bank {bank}] Saved: {fname}","blue")
+        count += 1
