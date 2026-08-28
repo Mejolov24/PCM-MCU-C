@@ -551,5 +551,5 @@ def sf2_to_wav(sf2 : Path, out_dir : Path, do_resample : bool, base_note : int):
             le,
             pitch,
         )
-        colors.cprint(f"[INFO] [Bank {bank}] Saved: {fname}","blue")
+        colors.cprint(f"[INFO] File at [Bank {bank}] Extracted : {fname}","blue")
         count += 1

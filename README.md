@@ -1,26 +1,31 @@
 # PCM-MCU-C
 ![Alt text](https://raw.githubusercontent.com/Mejolov24/PCM-MCU-C/refs/heads/main/thumbnails/thumbnail01.png)
-Convertion of files to .pcm format to allow fast access in micro controllers via single .h file or multiple files if you have an sd card
+Python utility to convert multiple audio files onto .pcm, .spack and .h files for microcontroller usage
 
-## Required dependencies:
+## Required dependencies (uv/venv supported):
 [ffmpeg-python](https://pypi.org/project/ffmpeg-python/)
 [numpy](https://pypi.org/project/numpy/)
 
 ## Usage
 create a folder and extract the zip in it.
 run main.py
-then choose from the 2 avalible options:
+then choose from the avalible options:
 
-1 : convert files
-2 : parse into .h file
+ - Convert to .pcm
+ - Convert .sf2 to .pcm
+ - Convert to .h
+ - Convert to .spack
+ - Configure
 
-If its the first time running the script or something went wrong with the settings.txt file,
-then you must configure how you want the audio to be processed.
+if you want to use any of the other file types, you must first convert to .pcm
 
-If you already have a config.txt file (made automaticly when missing and updated when changing setttings)
-then you can skip configurating by pressing enter and use your past settings.
+## Output folder
+after the conversion finishes, everything will be saved onto /output, wich is an exact replica of /input, so your folder structure is kept.
 
-### Binary Structure
+upon making .spacks, /output and /output/sf2 are treated as if they were separate dirs, everytime you convert, it will make a .spack for all sf2 sub folders, and one .spack for /output
+
+
+### .pcm Binary Structure
 The header is composed of **6 unsigned 32-bit integers** (4 bytes each) using **Little-Endian** byte order.
 
 | Offset | Size | Name | Description |
@@ -32,21 +37,27 @@ The header is composed of **6 unsigned 32-bit integers** (4 bytes each) using **
 | **16** | 4 | `Loop Start` | The sample index where the loop begins. |
 | **20** | 4 | `Loop End` | The sample index where the loop ends. |
 
----
+### .spack Binary Structure
 
-## Output folder
-after filling out the settings and conversion finishes, everything will be saved onto /output, wich is an exact replica of /input, so your folder structure is kept.
+| Offset | Size | Name | Description |
+| :--- | :--- | :--- | :--- |
+| **0** | 4 | `Magic Number` | Always `SPK1` (`0x53504B31`). Used to verify the container format. |
+| **4** | 4 | `Bank Count` | Total number of Bank sections contained in the file. |
+| **8** | 4 | `Sample Rate` | Global playback frequency for the audio assets. |
+| **12** | 4 | `Bit Depth` | Bit depth per sample (e.g., `8` or `16`). |
+| **16** | 4 * N | `Folder Offsets` | Array of N unsigned 32-bit integers storing absolute byte offsets to each folder block. |
+| **Variable** | 128 * 20 | `Folder Block (Slots)` | Array of 128 fixed-size slot entries per folder (20 bytes each: `name_offset`, `data_offset`, `length`, `loopA`, `loopB`). Empty slots are 20 zero bytes. |
+| **Variable** | Variable | `String Pool` | Sequential null-terminated UTF-8 strings (`\0`) for all sample names. |
+| **Variable** | Variable | `Audio Data` | Raw PCM audio payloads, stripped of their 24-byte source headers and aligned to the custom `ALIGNMENT` byte boundary. |
 
-when picking mode 1, all audio will be saved in a .pcm format, used as cache for when settings dont change.
-
-when picking mode 2, all audios will be saved into a single output.h file
 
 ## output.h file
 
 ### Constants :
-
+```c
 const int SampleRate = uint16_t;
 const int BitDepth = uint8_t;
+```
 
 ### .h structure:
 For each folder inside /input, it will generate an array of 128 elements of SampleData for storing the samples in that folder. their index is determined by the number next to the name, so you can name the file 01_sample, 2_sample, 003_sample, etc. if it doesnt have a number, it will use whatever index is free.

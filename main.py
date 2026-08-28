@@ -57,7 +57,7 @@ def sync_json_settings():
 
 def print_info():
     print("\033[H\033[2J")
-    colors.cprint(logo.logo,"green")
+    colors.cprint(logo.logo,"blue")
     print("Pulse Code Modulation - MicroController - Converter - by Guillermo Beckers (Mejolov24 in github)")
     print("Convert any file into an uncompressed format stored as .pcm via ffmpeg, useful for playing audio in microcontrollers with low processing power")
 
@@ -99,11 +99,12 @@ def convert_to_h():
     print_info()
 
 def convert_to_spack():
+    ##process /output/ but not /output/sf2
     file_count = sum(1 for item in output_dir.rglob("*.spack") if item.is_file())
     output_spack = output_dir / f"{file_count}_{settings["bit_depth"]}_bits_{settings["sampling_rate"]}_hz.spack"
     audio_utils.parse_to_spack(settings["sampling_rate"], settings["bit_depth"], settings["padding"], output_dir, output_spack)
 
-
+    ##process /output/sf2 separately and make an individual .spack per folder
     for sub_dir in sf2_final_output.glob("*"):
         if not sub_dir.is_dir(): continue
         file_count = sum(1 for item in output_dir.rglob("*.spack") if item.is_file())
