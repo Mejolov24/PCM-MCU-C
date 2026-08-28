@@ -1,5 +1,5 @@
 # PCM-MCU-C
-![Alt text](https://raw.githubusercontent.com/Mejolov24/PCM-MCU-C/refs/heads/main/thumbnails/thumbnail01.png)
+![Alt text](https://raw.githubusercontent.com/Mejolov24/PCM-MCU-C/refs/heads/main/thumbnails/thumbnail02.png)
 Python utility to convert multiple audio files onto .pcm, .spack and .h files for microcontroller usage
 
 ## Required dependencies (uv/venv supported):
